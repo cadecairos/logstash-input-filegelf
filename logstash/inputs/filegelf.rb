@@ -28,7 +28,16 @@ class LogStash::Inputs::FileGelf < LogStash::Inputs::Base
   public
   def register
     require 'gelfd'
-    @logger.info("Registering file input", :path => @path)
+    @logger.info("Registering GELF file input", :path => @path)
+
+    @path.each do |path|
+      if Pathname.new(path).relative?
+        raise ArgumentError.new("File paths must be absolute, relative path specified: #{path}")
+      end
+      if !File.exists?(path)
+        raise ArgumentError.new("File does not exist: #{path}")
+      end
+    end
   end # def register
 
   public
@@ -36,7 +45,11 @@ class LogStash::Inputs::FileGelf < LogStash::Inputs::Base
     puts @path
     @path.each do |path|
       File.open(path).readlines.each do |line|
-        event = LogStash::Event.new(JSON.parse(line))
+        begin
+          event = LogStash::Event.new(JSON.parse(line))
+        rescue => ex
+          raise
+        end
         if event['timestamp'].is_a?(Numeric)
           event['@timestamp'] = Time.at(event['timestamp']).gmtime
           event.remove('timestamp')
